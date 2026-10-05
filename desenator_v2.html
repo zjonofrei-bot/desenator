@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desenator</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:#eef1f5;color:#1b2430}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 12px;background:#fff;border-bottom:1px solid #d5dbe3}
+button,label.btn{font:inherit;font-size:14px;padding:8px 12px;border:1px solid #c5cdd8;border-radius:8px;background:#fff;color:inherit;cursor:pointer}
+button[aria-pressed="true"]{background:#2457d6;border-color:#2457d6;color:#fff}
+button.go{background:#12a150;border-color:#12a150;color:#fff;font-weight:600}
+button:focus-visible,input:focus-visible{outline:3px solid #2457d6;outline-offset:2px}
+.grp{display:flex;gap:6px;align-items:center}
+input[type=color]{width:42px;height:36px;padding:0;border:1px solid #c5cdd8;border-radius:8px;background:#fff}
+#stk,#shp{display:none;flex-wrap:wrap;gap:4px;padding:8px 12px;background:#fff;border-bottom:1px solid #d5dbe3}
+#stk.on,#shp.on{display:flex}
+#sw{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+#sw button.s{width:28px;height:28px;padding:0;border-radius:50%;border:2px solid #c5cdd8}
+#sw button.s.sel{border-color:#1b2430;box-shadow:0 0 0 2px #fff,0 0 0 4px #2457d6}
+#tbar{display:none;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:#fff;border-bottom:1px solid #d5dbe3;font-size:14px}
+#tbar.on{display:flex}
+#tbar input{font:inherit;padding:6px 10px;border:1px solid #c5cdd8;border-radius:8px;min-width:180px}
+#tbar span{color:#5a6676}
+.hide{display:none!important}
+#dot{display:inline-block;border-radius:50%;background:#1b2430;vertical-align:middle;margin-left:6px}
+#stk button{font-size:24px;padding:2px 8px;line-height:1.3}
+#shp{align-items:center;font-size:14px}
+#shp button.sh{padding:4px 8px;line-height:0}
+#shp button.sh svg{width:26px;height:26px;display:block}
+#shp span{color:#5a6676;margin-left:6px}
+.zm button{min-width:40px}
+#wrap{padding:12px;display:flex;overflow:auto}
+#stage{flex:none;margin:0 auto;width:100%;max-width:900px;aspect-ratio:900/600;border:1px solid #c5cdd8;border-radius:8px;overflow:hidden;
+background-color:#fff;background-image:linear-gradient(45deg,#e4e8ee 25%,transparent 25%,transparent 75%,#e4e8ee 75%),linear-gradient(45deg,#e4e8ee 25%,transparent 25%,transparent 75%,#e4e8ee 75%);background-size:20px 20px;background-position:0 0,10px 10px}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair}
+#msg{padding:0 12px 14px;text-align:center;font-size:14px;color:#5a6676;min-height:24px}
+</style>
+</head>
+<body>
+<header>
+  <div class="grp" role="group" aria-label="Unelte">
+    <button id="tP" aria-pressed="true">Pensulă</button>
+    <button id="tE" aria-pressed="false">Radieră</button>
+    <button id="tS" aria-pressed="false">Abțibild</button>
+    <button id="tT" aria-pressed="false">Text</button>
+    <button id="tF" aria-pressed="false">Umplere</button>
+    <button id="tH" aria-pressed="false">Figuri</button>
+    <button id="tM" aria-pressed="false">Mână</button>
+  </div>
+  <div class="grp" id="colg"><span>Culoare</span><div id="sw" role="group" aria-label="Culori"></div><input type="color" id="col" value="#1b2430" aria-label="Alege altă culoare"></div>
+  <div class="grp"><label for="sz"><span id="szl">Mărime</span>: <b id="szv">8</b> px</label><input type="range" id="sz" min="2" max="80" value="8"><span id="dot" aria-hidden="true" style="width:8px;height:8px"></span></div>
+  <div class="grp zm" role="group" aria-label="Zoom"><button id="zo" aria-label="Mai departe (zoom out)" title="Mai departe">−</button><button id="zv" title="Resetează zoomul la 100%">100%</button><button id="zi" aria-label="Mai aproape (zoom in)" title="Mai aproape">+</button></div>
+  <div class="grp">
+    <button id="un">Înapoi</button>
+    <button id="cl">Șterge tot</button>
+    <button id="dl" class="go">Descarcă PNG</button>
+  </div>
+</header>
+<div id="stk" aria-label="Abțibilduri"></div>
+<div id="shp" aria-label="Figuri"></div>
+<div id="tbar"><label for="tin">Textul tău:</label> <input id="tin" type="text" value="Salut!" maxlength="60"> <span>Apoi dă click pe desen unde vrei să apară. Mărimea o schimbi din cursorul Mărime.</span></div>
+<div id="wrap"><div id="stage"><canvas id="c" width="900" height="600"></canvas></div></div>
+<div id="msg">Fundalul este transparent. La descărcare se salvează doar ce ai desenat, fără foaia goală.</div>
+<script>
+const cv=document.getElementById("c"),x=cv.getContext("2d",{willReadFrequently:true});
+const $=id=>document.getElementById(id);
+const STK=["😀","😎","😍","🤖","👻","🔥","⭐","❤️","🌈","🌸","🌳","☀️","🐶","🐱","🐟","🦖","🚀","🚗","🍕","🎈","👑","💎"];
+let tool="P",sticker=STK[0],down=false,last=null,hist=[],shape="rect",fillOn=false,shp=null,panning=null,zoom=1;
+const wrap=$("wrap"),stage=$("stage");
+x.lineCap=x.lineJoin="round";
+setTimeout(()=>{pick("#1b2430");upSize()},0);
+
+STK.forEach(s=>{const b=document.createElement("button");b.textContent=s;b.setAttribute("aria-label","Abțibild "+s);
+  b.onclick=()=>{sticker=s;setTool("S");document.querySelectorAll("#stk button").forEach(k=>k.style.background=k===b?"#dbe7ff":"")};
+  $("stk").appendChild(b)});
+
+const SHP=[["line","Linie",'<path d="M4 20L20 4"/>'],["rect","Dreptunghi",'<rect x="4" y="6" width="16" height="12"/>'],["ell","Elipsă",'<ellipse cx="12" cy="12" rx="8" ry="6"/>'],["tri","Triunghi",'<path d="M12 4L21 20H3Z"/>'],["dia","Romb",'<path d="M12 3L21 12L12 21L3 12Z"/>'],["star","Stea",'<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.3l6.1-.7z"/>'],["heart","Inimă",'<path d="M12 20S3 14 3 8.5A4.5 4.5 0 0 1 12 6.5 4.5 4.5 0 0 1 21 8.5C21 14 12 20 12 20Z"/>'],["arrow","Săgeată",'<path d="M4 12H19M13 6l6 6-6 6"/>']];
+SHP.forEach(([k,n,svg])=>{const b=document.createElement("button");b.className="sh";b.dataset.k=k;b.title=n;b.setAttribute("aria-label",n);
+  b.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">${svg}</svg>`;
+  b.onclick=()=>{shape=k;setTool("H");markShape()};$("shp").appendChild(b)});
+const fm=document.createElement("button");fm.textContent="Contur";fm.title="Schimbă între contur și umplut";fm.setAttribute("aria-pressed","false");
+fm.onclick=()=>{fillOn=!fillOn;fm.textContent=fillOn?"Umplut":"Contur";fm.setAttribute("aria-pressed",String(fillOn))};$("shp").appendChild(fm);
+const hint=document.createElement("span");hint.textContent="Trage pe desen. Ține Shift pentru o formă perfectă (pătrat, cerc, linie dreaptă).";$("shp").appendChild(hint);
+function markShape(){document.querySelectorAll("#shp .sh").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.k===shape)))}
+markShape();
+
+const COLORS=["#1b2430","#ffffff","#e03131","#f76707","#fcc419","#2f9e44","#1c7ed6","#7048e8","#e64980","#8d5a2b"];
+function pick(c){$("col").value=c;document.querySelectorAll("#sw .s").forEach(b=>b.classList.toggle("sel",b.dataset.c===c));$("dot").style.background=c}
+COLORS.forEach(c=>{const b=document.createElement("button");b.className="s";b.dataset.c=c;b.style.background=c;b.setAttribute("aria-label","Culoare "+c);b.onclick=()=>pick(c);$("sw").appendChild(b)});
+$("col").addEventListener("input",e=>pick(e.target.value));
+function upSize(){const v=+$("sz").value;$("szv").textContent=tool==="T"?v*3:v;$("szl").textContent=tool==="T"?"Mărime text":tool==="H"?"Grosime contur":"Mărime";const d=Math.min(v,40);$("dot").style.width=$("dot").style.height=d+"px"}
+$("sz").addEventListener("input",upSize);
+function setTool(t){tool=t;
+  $("stk").classList.toggle("on",t==="S");$("tbar").classList.toggle("on",t==="T");$("colg").classList.toggle("hide",t==="E");$("shp").classList.toggle("on",t==="H");cv.style.cursor=t==="M"?"grab":"";
+  [["P","tP"],["E","tE"],["S","tS"],["T","tT"],["F","tF"],["H","tH"],["M","tM"]].forEach(([k,id])=>$(id).setAttribute("aria-pressed",t===k));
+  upSize();
+}
+$("tP").onclick=()=>setTool("P");$("tE").onclick=()=>setTool("E");$("tS").onclick=()=>setTool("S");$("tT").onclick=()=>setTool("T");$("tF").onclick=()=>setTool("F");$("tH").onclick=()=>setTool("H");$("tM").onclick=()=>setTool("M");
+
+function snap(){hist.push(x.getImageData(0,0,cv.width,cv.height));if(hist.length>30)hist.shift()}
+function undo(){if(hist.length)x.putImageData(hist.pop(),0,0)}
+$("un").onclick=undo;
+$("cl").onclick=()=>{snap();x.clearRect(0,0,cv.width,cv.height)};
+addEventListener("keydown",e=>{if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();undo()}});
+
+function pos(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)*cv.width/r.width,y:(e.clientY-r.top)*cv.height/r.height}}
+function stroke(a,b){
+  x.globalCompositeOperation=tool==="E"?"destination-out":"source-over";
+  x.strokeStyle=x.fillStyle=$("col").value;x.lineWidth=+$("sz").value;
+  x.beginPath();x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);x.stroke();
+  if(a.x===b.x&&a.y===b.y){x.beginPath();x.arc(a.x,a.y,x.lineWidth/2,0,7);x.fill()}
+}
+cv.addEventListener("pointerdown",e=>{
+  e.preventDefault();if(tool==="M"){panning={cx:e.clientX,cy:e.clientY,sl:wrap.scrollLeft,st:wrap.scrollTop};cv.setPointerCapture(e.pointerId);cv.style.cursor="grabbing";return}const p=pos(e);snap();if(tool==="H"){cv.setPointerCapture(e.pointerId);shp={a:p,b:p,base:hist[hist.length-1]};return}
+  if(tool==="F"){fill(p);return}
+  if(tool==="T"){const t=$("tin").value;if(!t)return;x.globalCompositeOperation="source-over";x.fillStyle=$("col").value;
+    x.font=`bold ${+$("sz").value*3}px system-ui,sans-serif`;x.textAlign="center";x.textBaseline="middle";x.fillText(t,p.x,p.y);return}
+  if(tool==="S"){const s=Math.max(40,+$("sz").value*4);x.globalCompositeOperation="source-over";
+    x.font=`${s}px serif`;x.textAlign="center";x.textBaseline="middle";x.fillText(sticker,p.x,p.y);return}
+  cv.setPointerCapture(e.pointerId);down=true;last=p;stroke(p,p);
+});
+cv.addEventListener("pointermove",e=>{
+  if(panning){wrap.scrollLeft=panning.sl-(e.clientX-panning.cx);wrap.scrollTop=panning.st-(e.clientY-panning.cy);return}
+  if(shp){shp.b=constrain(shp.a,pos(e),e.shiftKey);drawShape(shp);return}
+  if(!down)return;const p=pos(e);stroke(last,p);last=p});
+["pointerup","pointercancel"].forEach(t=>cv.addEventListener(t,()=>{
+  if(shp){if(Math.hypot(shp.b.x-shp.a.x,shp.b.y-shp.a.y)<4){x.putImageData(shp.base,0,0);hist.pop()}shp=null}
+  if(panning){panning=null;cv.style.cursor=tool==="M"?"grab":""}
+  down=false}));
+
+/* ---------- Figuri ---------- */
+function constrain(a,p,shift){
+  if(!shift)return p;const dx=p.x-a.x,dy=p.y-a.y;
+  if(shape==="line"||shape==="arrow"){const an=Math.round(Math.atan2(dy,dx)/(Math.PI/4))*Math.PI/4,l=Math.hypot(dx,dy);return{x:a.x+Math.cos(an)*l,y:a.y+Math.sin(an)*l}}
+  const m=Math.max(Math.abs(dx),Math.abs(dy));return{x:a.x+(dx<0?-m:m),y:a.y+(dy<0?-m:m)}}
+function shapePath(k,a,b){
+  const l=Math.min(a.x,b.x),t=Math.min(a.y,b.y),r=Math.max(a.x,b.x),bt=Math.max(a.y,b.y),w=r-l,h=bt-t,cx=l+w/2,cy=t+h/2;
+  x.beginPath();
+  switch(k){
+    case"line":x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);break;
+    case"rect":x.rect(l,t,w,h);break;
+    case"ell":x.ellipse(cx,cy,w/2,h/2,0,0,Math.PI*2);break;
+    case"tri":x.moveTo(cx,t);x.lineTo(r,bt);x.lineTo(l,bt);x.closePath();break;
+    case"dia":x.moveTo(cx,t);x.lineTo(r,cy);x.lineTo(cx,bt);x.lineTo(l,cy);x.closePath();break;
+    case"star":for(let i=0;i<10;i++){const an=-Math.PI/2+i*Math.PI/5,rad=i%2?.42:1,px=cx+Math.cos(an)*rad*w/2,py=cy+Math.sin(an)*rad*h/2;i?x.lineTo(px,py):x.moveTo(px,py)}x.closePath();break;
+    case"heart":x.moveTo(cx,t+h*.25);x.bezierCurveTo(cx,t,l,t,l,t+h*.3);x.bezierCurveTo(l,t+h*.6,cx,t+h*.8,cx,bt);x.bezierCurveTo(cx,t+h*.8,r,t+h*.6,r,t+h*.3);x.bezierCurveTo(r,t,cx,t,cx,t+h*.25);x.closePath();break;
+    case"arrow":{const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy);if(len<1)break;const an=Math.atan2(dy,dx),hs=Math.min(len*.5,Math.max(18,x.lineWidth*4));
+      x.moveTo(a.x,a.y);x.lineTo(b.x,b.y);
+      x.moveTo(b.x-hs*Math.cos(an-.5),b.y-hs*Math.sin(an-.5));x.lineTo(b.x,b.y);x.lineTo(b.x-hs*Math.cos(an+.5),b.y-hs*Math.sin(an+.5));x.closePath();break}
+  }}
+function drawShape(s){
+  x.putImageData(s.base,0,0);x.globalCompositeOperation="source-over";
+  x.lineWidth=+$("sz").value;x.strokeStyle=x.fillStyle=$("col").value;
+  shapePath(shape,s.a,s.b);if(fillOn&&shape!=="line")x.fill();x.stroke()}
+
+/* ---------- Zoom ---------- */
+function fit(){
+  const base=Math.min(900,document.documentElement.clientWidth-24);
+  stage.style.maxWidth="none";stage.style.width=Math.round(base*zoom)+"px";
+  const t=20*zoom;stage.style.backgroundSize=t+"px "+t+"px";stage.style.backgroundPosition="0 0,"+t/2+"px "+t/2+"px";
+  cv.style.imageRendering=zoom>2?"pixelated":"";wrap.style.maxHeight=zoom>1?"72vh":"";
+  $("zv").textContent=Math.round(zoom*100)+"%"}
+function setZoom(z,cx,cy){
+  z=Math.min(4,Math.max(.25,z));if(Math.abs(z-1)<.06)z=1;
+  const wr=wrap.getBoundingClientRect();if(cx==null){cx=wr.width/2;cy=wr.height/2}
+  const sr=stage.getBoundingClientRect(),fx=(wr.left+cx-sr.left)/sr.width,fy=(wr.top+cy-sr.top)/sr.height;
+  zoom=z;fit();
+  const s2=stage.getBoundingClientRect();
+  wrap.scrollLeft+=s2.left+fx*s2.width-(wr.left+cx);wrap.scrollTop+=s2.top+fy*s2.height-(wr.top+cy)}
+$("zi").onclick=()=>setZoom(zoom*1.25);$("zo").onclick=()=>setZoom(zoom/1.25);$("zv").onclick=()=>setZoom(1);
+wrap.addEventListener("wheel",e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();const wr=wrap.getBoundingClientRect();setZoom(zoom*(e.deltaY<0?1.12:1/1.12),e.clientX-wr.left,e.clientY-wr.top)},{passive:false});
+addEventListener("resize",fit);
+addEventListener("keydown",e=>{const t=e.target;if(t&&(t.tagName==="INPUT"||t.tagName==="TEXTAREA"))return;if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key==="+"||e.key==="=")setZoom(zoom*1.25);else if(e.key==="-"||e.key==="_")setZoom(zoom/1.25);else if(e.key==="0")setZoom(1)});
+fit();
+
+function fill(p){
+  const w=cv.width,h=cv.height,img=x.getImageData(0,0,w,h),d=img.data,sx=Math.round(p.x),sy=Math.round(p.y);
+  if(sx<0||sy<0||sx>=w||sy>=h)return;
+  const hex=$("col").value,R=parseInt(hex.slice(1,3),16),G=parseInt(hex.slice(3,5),16),B=parseInt(hex.slice(5,7),16);
+  const i0=(sy*w+sx)*4,tr=d[i0],tg=d[i0+1],tb=d[i0+2],ta=d[i0+3];
+  if(ta===255&&tr===R&&tg===G&&tb===B)return;
+  const near=i=>Math.abs(d[i]-tr)+Math.abs(d[i+1]-tg)+Math.abs(d[i+2]-tb)+Math.abs(d[i+3]-ta)<=(ta<255?160:90);
+  const seen=new Uint8Array(w*h),st=[sy*w+sx];
+  while(st.length){const n=st.pop();if(seen[n])continue;const i=n*4;if(!near(i))continue;seen[n]=1;
+    d[i]=R;d[i+1]=G;d[i+2]=B;d[i+3]=255;
+    const X=n%w;if(X>0)st.push(n-1);if(X<w-1)st.push(n+1);if(n>=w)st.push(n-w);if(n<w*(h-1))st.push(n+w)}
+  x.putImageData(img,0,0);
+}
+$("dl").onclick=()=>{
+  const d=x.getImageData(0,0,cv.width,cv.height).data,w=cv.width,h=cv.height;
+  let x0=w,y0=h,x1=-1,y1=-1;
+  for(let y=0;y<h;y++)for(let X=0;X<w;X++)if(d[(y*w+X)*4+3]>8){if(X<x0)x0=X;if(X>x1)x1=X;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(x1<0){$("msg").textContent="Nu ai desenat nimic încă. Desenează ceva, apoi descarcă.";return}
+  const pad=6;x0=Math.max(0,x0-pad);y0=Math.max(0,y0-pad);x1=Math.min(w-1,x1+pad);y1=Math.min(h-1,y1+pad);
+  const o=document.createElement("canvas");o.width=x1-x0+1;o.height=y1-y0+1;
+  o.getContext("2d").drawImage(cv,x0,y0,o.width,o.height,0,0,o.width,o.height);
+  o.toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="desen.png";document.body.appendChild(a);a.click();a.remove();
+    $("msg").textContent=`Descărcat: desen.png (${o.width}×${o.height} px, fundal transparent).`},"image/png");
+};
+</script>
+</body>
+</html>
